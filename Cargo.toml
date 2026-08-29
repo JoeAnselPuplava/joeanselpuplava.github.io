@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 ratzilla = "0.3.1"
+critical-section = { version = "1.2", features = ["std"] }
