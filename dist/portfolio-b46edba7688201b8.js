@@ -216,6 +216,14 @@ function __wbg_get_imports() {
             const ret = new Object();
             return ret;
         },
+        __wbg_now_e7c6795a7f81e10f: function(arg0) {
+            const ret = arg0.now();
+            return ret;
+        },
+        __wbg_performance_3fcf6e32a7e1ed0a: function(arg0) {
+            const ret = arg0.performance;
+            return ret;
+        },
         __wbg_push_adb0107829f02d75: function(arg0, arg1) {
             const ret = arg0.push(arg1);
             return ret;
@@ -284,18 +292,18 @@ function __wbg_get_imports() {
             return ret;
         },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("Event")], shim_idx: 32, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__ha705f431d75afab1);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("Event")], shim_idx: 35, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__hf4db03b53db62692);
             return ret;
         },
         __wbindgen_cast_0000000000000002: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("KeyboardEvent")], shim_idx: 14, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h95a7bacf97be42de);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("KeyboardEvent")], shim_idx: 9, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__ha31603d981de1788);
             return ret;
         },
         __wbindgen_cast_0000000000000003: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [], shim_idx: 13, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h482e94a1207d7414);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [], shim_idx: 8, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h47d81ece699f9dca);
             return ret;
         },
         __wbindgen_cast_0000000000000004: function(arg0) {
@@ -324,16 +332,16 @@ function __wbg_get_imports() {
     };
 }
 
-function wasm_bindgen__convert__closures_____invoke__h482e94a1207d7414(arg0, arg1) {
-    wasm.wasm_bindgen__convert__closures_____invoke__h482e94a1207d7414(arg0, arg1);
+function wasm_bindgen__convert__closures_____invoke__h47d81ece699f9dca(arg0, arg1) {
+    wasm.wasm_bindgen__convert__closures_____invoke__h47d81ece699f9dca(arg0, arg1);
 }
 
-function wasm_bindgen__convert__closures_____invoke__ha705f431d75afab1(arg0, arg1, arg2) {
-    wasm.wasm_bindgen__convert__closures_____invoke__ha705f431d75afab1(arg0, arg1, arg2);
+function wasm_bindgen__convert__closures_____invoke__hf4db03b53db62692(arg0, arg1, arg2) {
+    wasm.wasm_bindgen__convert__closures_____invoke__hf4db03b53db62692(arg0, arg1, arg2);
 }
 
-function wasm_bindgen__convert__closures_____invoke__h95a7bacf97be42de(arg0, arg1, arg2) {
-    wasm.wasm_bindgen__convert__closures_____invoke__h95a7bacf97be42de(arg0, arg1, arg2);
+function wasm_bindgen__convert__closures_____invoke__ha31603d981de1788(arg0, arg1, arg2) {
+    wasm.wasm_bindgen__convert__closures_____invoke__ha31603d981de1788(arg0, arg1, arg2);
 }
 
 const TerminalDebugApiFinalization = (typeof FinalizationRegistry === 'undefined')

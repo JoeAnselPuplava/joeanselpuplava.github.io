@@ -7,16 +7,19 @@ use ratzilla::ratatui::{
 use std::cell::RefCell;
 use std::io;
 use std::rc::Rc;
+use web_time::Instant;
 
 use ratzilla::{DomBackend, WebGl2Backend, WebRenderer, event::KeyCode};
 
 mod home;
+mod rain;
 
 fn main() -> io::Result<()> {
     let counter = Rc::new(RefCell::new(0));
     // let backend = WebGl2Backend::new()?;
     let backend = DomBackend::new()?;
     let mut terminal = Terminal::new(backend)?;
+    let start_time = Instant::now();
 
     terminal.on_key_event({
         let counter_cloned = counter.clone();
@@ -28,29 +31,10 @@ fn main() -> io::Result<()> {
         }
     })?;
 
-    //This draw doesn't work
-    terminal.draw_web(home::draw);
-
-    // This draw does work
-    // terminal.draw_web(move |f| {
-    //     let counter = counter.borrow();
-    //     f.render_widget(
-    //         Paragraph::new(format!("Count: {counter}"))
-    //             .alignment(Alignment::Center)
-    //             .block(
-    //                 Block::bordered()
-    //                     .title("Joe-Ansel Puplava")
-    //                     .title_alignment(Alignment::Center)
-    //                     .border_style(Color::Cyan),
-    //             ),
-    //         Rect::new(
-    //             f.area().width / 4,
-    //             f.area().height / 4,
-    //             f.area().width / 2,
-    //             f.area().height / 2,
-    //         ),
-    //     );
-    // });
+    terminal.draw_web(move |f| {
+        rain::view(f, start_time.elapsed());
+        home::draw(f);
+    });
 
     Ok(())
 }

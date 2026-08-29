@@ -6,3 +6,5 @@ edition = "2024"
 [dependencies]
 ratzilla = "0.3.1"
 critical-section = { version = "1.2", features = ["std"] }
+web-time = "1.1.0"
+tui-rain = { git = "https://github.com/SuperJappie08/tui-rain", rev = "8a1f6f4a10508778daf6da9614cdbef31f968779" }
