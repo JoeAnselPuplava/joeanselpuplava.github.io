@@ -1,6 +1,6 @@
 use ratzilla::ratatui::{
     Terminal,
-    layout::Alignment,
+    layout::{Alignment, Constraint, Rect},
     style::Color,
     widgets::{Block, Paragraph},
 };
@@ -32,11 +32,16 @@ fn main() -> io::Result<()> {
                 .alignment(Alignment::Center)
                 .block(
                     Block::bordered()
-                        .title("Ratzilla")
+                        .title("Joe-Ansel Puplava")
                         .title_alignment(Alignment::Center)
-                        .border_style(Color::Yellow),
+                        .border_style(Color::Cyan),
                 ),
-            f.area(),
+            Rect::new(
+                f.area().width / 4,
+                f.area().height / 4,
+                f.area().width / 2,
+                f.area().height / 2,
+            ),
         );
     });
 
