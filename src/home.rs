@@ -4,7 +4,7 @@ use ratzilla::ratatui::{
     Frame,
     layout::{
         Constraint::{self, Percentage, Ratio},
-        Layout, Spacing,
+        Layout, Rect, Spacing,
     },
     style::{Color, Style},
     symbols::merge::MergeStrategy,
@@ -14,11 +14,21 @@ use ratzilla::ratatui::{
 
 use crate::app::{App, MENU, Pane};
 
-/// Draws the home screen from the current `App` state.
-pub fn draw(frame: &mut Frame, app: &App) {
+/// Where each part of the home screen sits on the terminal grid.
+pub struct Areas {
+    pub whole: Rect, // everything below, used to clear the rain
+    pub title: Rect,
+    pub menu: Rect,
+    pub content: Rect,
+    pub status: Rect,
+}
+
+/// Splits the screen into the home screen's areas. Shared by `draw` and the
+/// mouse code in `update.rs` so clicks hit exactly what is drawn.
+pub fn layout(screen: Rect) -> Areas {
     use Constraint::{Fill, Length, Min};
     // Use the middle 70% of the screen; the rain shows around it.
-    let area = frame.area().centered(Percentage(70), Percentage(70));
+    let area = screen.centered(Percentage(70), Percentage(70));
 
     // Rows: title, main area, status bar. Overlap(1) makes neighbouring
     // borders share a line so merge_borders can join them.
@@ -28,6 +38,25 @@ pub fn draw(frame: &mut Frame, app: &App) {
     // Columns: menu (1/5 of the width) and content (4/5).
     let horizontal = Layout::horizontal([Fill(1), Fill(4)]);
     let [left_area, right_area] = horizontal.spacing(Spacing::Overlap(1)).areas(main_area);
+
+    Areas {
+        whole: area,
+        title: title_area,
+        menu: left_area,
+        content: right_area,
+        status: status_area,
+    }
+}
+
+/// Draws the home screen from the current `App` state.
+pub fn draw(frame: &mut Frame, app: &App) {
+    let Areas {
+        whole: area,
+        title: title_area,
+        menu: left_area,
+        content: right_area,
+        status: status_area,
+    } = layout(frame.area());
 
     // Erase the rain behind the home screen.
     frame.render_widget(Clear, area);
@@ -39,7 +68,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
     // Yellow border on the pane that has focus.
     let focused = |p| {
         if app.focus == p {
-            Color::Yellow
+            Color::LightCyan
         } else {
             Color::Reset
         }
@@ -53,7 +82,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
                 .border_style(focused(Pane::Menu)),
         )
         .highlight_symbol("> ")
-        .highlight_style(Style::new().reversed());
+        .highlight_style(Style::new().bold().black().bg(Color::White));
     let mut state = ListState::default().with_selected(Some(app.selected));
     frame.render_stateful_widget(list, left_area, &mut state);
 

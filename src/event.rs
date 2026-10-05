@@ -2,9 +2,8 @@
 //! push into a channel, and the render loop drains it once per frame.
 
 use ratzilla::{
-    WebRenderer,
-    event::{KeyEvent, MouseEvent},
-    web_sys::{self, KeyboardEvent},
+    event::KeyEvent,
+    web_sys::{self, KeyboardEvent, MouseEvent},
 };
 use std::sync::mpsc;
 use wasm_bindgen::{JsCast, closure::Closure};
@@ -17,7 +16,9 @@ pub enum Event {
     /// Fired every `tick_rate` milliseconds.
     Tick,
     Key(KeyEvent),
-    Mouse(MouseEvent),
+    /// Left click. `x`/`y` are fractions (0.0-1.0) across and down the
+    /// terminal grid; `main.rs` turns them into a cell using the current size.
+    Click { x: f64, y: f64 },
 }
 
 /// Collects browser input events so the render loop can handle them in order.
@@ -29,13 +30,17 @@ pub struct EventHandler {
 }
 
 impl EventHandler {
-    /// Registers key and mouse callbacks on the terminal. `tick_rate` is in ms.
-    pub fn new<T: WebRenderer>(terminal: &mut T, tick_rate: u64) -> std::io::Result<Self> {
+    /// Registers key and click listeners on the page. `tick_rate` is in ms.
+    pub fn new(tick_rate: u64) -> std::io::Result<Self> {
         let (sender, receiver) = mpsc::channel();
+        let document = web_sys::window()
+            .and_then(|w| w.document())
+            .ok_or_else(|| std::io::Error::other("no document"))?;
 
         // Each callback gets its own sender. Errors are ignored because the
         // receiver lives as long as the page does.
         let key_tx = sender.clone();
+
         // Listen for keys on the whole document instead of using
         // `terminal.on_key_event`: that one only fires while the grid element
         // has focus, and DomBackend replaces the grid on window resize, which
@@ -43,20 +48,36 @@ impl EventHandler {
         let on_key = Closure::<dyn FnMut(KeyboardEvent)>::new(move |e: KeyboardEvent| {
             let _ = key_tx.send(Event::Key(e.into()));
         });
-        web_sys::window()
-            .and_then(|w| w.document())
-            .ok_or_else(|| std::io::Error::other("no document"))?
+        document
             .add_event_listener_with_callback("keydown", on_key.as_ref().unchecked_ref())
             .map_err(|e| std::io::Error::other(format!("{e:?}")))?;
         // Leak the closure on purpose so the listener stays alive for the page's lifetime.
         on_key.forget();
 
-        let mouse_tx = sender;
-        terminal
-            .on_mouse_event(move |e| {
-                let _ = mouse_tx.send(Event::Mouse(e));
-            })
-            .map_err(std::io::Error::other)?;
+        // Clicks are also listened for on the whole document, for the same
+        // resize reason. The grid is looked up on every click so it is never
+        // the stale, replaced element.
+        let click_tx = sender;
+        let click_doc = document.clone();
+        let on_click = Closure::<dyn FnMut(MouseEvent)>::new(move |e: MouseEvent| {
+            if e.button() != 0 {
+                return; // left button only
+            }
+            let Some(grid) = click_doc.get_element_by_id("grid") else {
+                return;
+            };
+            let rect = grid.get_bounding_client_rect();
+            let x = (e.client_x() as f64 - rect.left()) / rect.width();
+            let y = (e.client_y() as f64 - rect.top()) / rect.height();
+            // Ignore clicks outside the grid (this also skips NaN from a 0-size rect).
+            if (0.0..1.0).contains(&x) && (0.0..1.0).contains(&y) {
+                let _ = click_tx.send(Event::Click { x, y });
+            }
+        });
+        document
+            .add_event_listener_with_callback("click", on_click.as_ref().unchecked_ref())
+            .map_err(|e| std::io::Error::other(format!("{e:?}")))?;
+        on_click.forget();
 
         Ok(Self {
             receiver,

@@ -1,7 +1,12 @@
-//! Key bindings: turns key presses into changes to `App` (vim-style motions).
+//! Input handling: turns key presses (vim-style motions) and clicks into
+//! changes to `App`.
 
-use crate::app::{App, Pane};
-use ratzilla::event::{KeyCode, KeyEvent};
+use crate::app::{App, MENU, Pane};
+use crate::home::Areas;
+use ratzilla::{
+    event::{KeyCode, KeyEvent},
+    ratatui::layout::Position,
+};
 
 /// Handles one key press. To add a binding, add an arm to the `match`.
 pub fn update(app: &mut App, key: KeyEvent) {
@@ -27,5 +32,28 @@ pub fn update(app: &mut App, key: KeyEvent) {
         (_, KeyCode::Char('h') | KeyCode::Left) => app.focus = Pane::Menu,
         (_, KeyCode::Char('l') | KeyCode::Right | KeyCode::Enter) => app.focus = Pane::Content,
         _ => {} // Esc and unknown keys do nothing; count and pending were already cleared
+    }
+}
+
+/// Handles a left click on cell (`col`, `row`): clicking a pane focuses it,
+/// and clicking a menu entry selects it.
+pub fn click(app: &mut App, col: u16, row: u16, areas: &Areas) {
+    // A click cancels a half-typed count or "g", like any other key would.
+    app.count = None;
+    app.pending = None;
+
+    let pos = Position::new(col, row);
+    if areas.menu.contains(pos) {
+        app.focus = Pane::Menu;
+        // Row 0 of the menu area is its top border, so items start at y + 1.
+        // Assumes the list never scrolls, which holds while MENU fits on screen.
+        if let Some(index) = row.checked_sub(areas.menu.y + 1).map(usize::from)
+            && index < MENU.len()
+        {
+            app.selected = index;
+            app.scroll = 0;
+        }
+    } else if areas.content.contains(pos) {
+        app.focus = Pane::Content;
     }
 }
