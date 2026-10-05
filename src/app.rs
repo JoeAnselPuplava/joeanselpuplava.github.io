@@ -13,7 +13,10 @@ pub struct Entry {
 impl Entry {
     /// A normal page.
     pub const fn page(title: &'static str) -> Self {
-        Self { title, children: &[] }
+        Self {
+            title,
+            children: &[],
+        }
     }
 
     /// A directory: Space opens its sub-menu, Backspace comes back.
@@ -57,14 +60,15 @@ pub enum Pane {
 /// The whole state of the site. `update.rs` changes it, `home.rs` draws it.
 #[derive(Debug, Default)]
 pub struct App {
-    pub focus: Pane,           // pane that j/k act on
-    pub path: Vec<usize>,      // directories opened, as indices from MENU down (empty = Home)
-    pub selected: usize,       // highlighted item in the current menu
-    pub scroll: u16,           // scroll offset of the page being shown
+    pub focus: Pane,                            // pane that j/k act on
+    pub path: Vec<usize>, // directories opened, as indices from MENU down (empty = Home)
+    pub selected: usize,  // highlighted item in the current menu
+    pub scroll: u16,      // scroll offset of the page being shown
     pub saved_scroll: HashMap<Vec<usize>, u16>, // where each page was left, keyed by `key()`
-    pub max_scroll: u16,       // furthest `scroll` can go; set every frame in main.rs
-    pub count: Option<usize>,  // count typed before a motion, e.g. the 5 in "5j"
+    pub max_scroll: u16,  // furthest `scroll` can go; set every frame in main.rs
+    pub count: Option<usize>, // count typed before a motion, e.g. the 5 in "5j"
     pub pending: Option<char>, // first key of a two-key motion, e.g. the first g of "gg"
+    pub no_rain: bool,    // Says whether the rain should be turned on or not
 }
 
 impl App {

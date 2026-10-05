@@ -3,11 +3,11 @@
 use ratzilla::ratatui::Terminal;
 
 use std::io;
-use web_time::Instant;
 
 use ratzilla::{DomBackend, WebRenderer};
 
 use crate::event::EventHandler;
+use web_time::Instant;
 
 pub mod app; // state
 pub mod event; // input
@@ -20,10 +20,10 @@ fn main() -> io::Result<()> {
     // import WebGl2Backend and use: let backend = WebGl2Backend::new()?;
     let backend = DomBackend::new()?;
     let terminal = Terminal::new(backend)?;
-    let start_time = Instant::now();
 
     let mut app = app::App::new();
     let mut events = EventHandler::new(20)?;
+    let start_time = Instant::now();
 
     // Runs once per browser animation frame (~60 times a second).
     terminal.draw_web(move |f| {
@@ -56,8 +56,8 @@ fn main() -> io::Result<()> {
         // The page may have changed above, so update the limit before drawing.
         app.set_max_scroll(home::max_scroll(app.current(), &areas));
         // 2. Draw: rain first so the home screen sits on top of it.
-        rain::view(f, start_time.elapsed());
-        home::draw(f, &app);
+        // rain::view(f, start_time.elapsed());
+        home::draw(f, &app, start_time.elapsed());
     });
 
     Ok(())

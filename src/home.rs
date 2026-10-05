@@ -1,5 +1,7 @@
 //! Home screen: title, menu, content pane and status bar.
 
+use std::time::Duration;
+
 use ratzilla::ratatui::{
     Frame,
     layout::{
@@ -16,7 +18,6 @@ use ratzilla::ratatui::{
 };
 
 use crate::app::{App, Entry, Pane};
-
 /// Added after a directory's name in the menu. Try " ▸", " ›" or " ⏵".
 const DIR_MARKER: &str = "/";
 
@@ -130,7 +131,7 @@ pub fn max_scroll(entry: &Entry, areas: &Areas) -> u16 {
 }
 
 /// Draws the home screen from the current `App` state.
-pub fn draw(frame: &mut Frame, app: &App) {
+pub fn draw(frame: &mut Frame, app: &App, elapsed: Duration) {
     let Areas {
         whole: area,
         title: title_area,
@@ -138,6 +139,11 @@ pub fn draw(frame: &mut Frame, app: &App) {
         content: right_area,
         status: status_area,
     } = layout(frame.area());
+
+    // rain first so the home screen sits on top of it.
+    if !app.no_rain {
+        crate::rain::view(frame, elapsed);
+    }
 
     // Erase the rain behind the home screen.
     frame.render_widget(Clear, area);

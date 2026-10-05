@@ -2,7 +2,6 @@
 //! changes to `App`.
 
 use crate::app::{App, Pane};
-use crate::event::Event::Key;
 use crate::home::Areas;
 use ratzilla::{
     event::{KeyCode, KeyEvent},
@@ -34,6 +33,7 @@ pub fn update(app: &mut App, key: KeyEvent) {
         (_, KeyCode::Char('l') | KeyCode::Right) => app.focus = Pane::Content,
         (_, KeyCode::Char(' ') | KeyCode::Enter) => app.enter(), // open a directory
         (_, KeyCode::Backspace) => app.leave(),                  // back to the parent menu
+        (_, KeyCode::Char('x')) => app.no_rain = !app.no_rain,
         _ => {} // Esc and unknown keys do nothing; count and pending were already cleared
     }
 }
