@@ -201,18 +201,71 @@ pub fn draw(frame: &mut Frame, app: &App, elapsed: Duration) {
         );
     }
 
-    // Status bar: like vim's showcmd, display the count or "g" being typed
+    // Status bar: the keys that do something right now. On the right of its
+    // border, like vim's showcmd, the count or "g" being typed.
     let typed = format!(
         "{}{}",
         app.count.map(|c| c.to_string()).unwrap_or_default(),
         app.pending.map(String::from).unwrap_or_default()
     );
     frame.render_widget(
-        Paragraph::new(typed).block(
-            Block::bordered()
-                .title("Status Bar")
-                .merge_borders(MergeStrategy::Exact),
-        ),
+        Paragraph::new(key_hints(app))
+            .wrap(Wrap { trim: true })
+            .block(
+                Block::bordered()
+                    .title("Hints")
+                    .title_top(Line::raw(typed).right_aligned())
+                    .merge_borders(MergeStrategy::Exact),
+            ),
         status_area,
     );
+}
+
+/// Key binds for the status bar, depending on which pane has focus, whether
+/// the highlighted entry is a directory, whether we're inside one, and
+/// whether the content can scroll, plus a note on its own line below.
+/// Keep in sync with `update::update`.
+fn key_hints(app: &App) -> Text<'static> {
+    let mut hints: Vec<(&str, &str)> = Vec::new();
+    match app.focus {
+        Pane::Menu => {
+            hints.push(("j/k", "up/down"));
+            hints.push(("gg/G", "first/last"));
+            hints.push(("l", "focus content"));
+        }
+        Pane::Content => {
+            if app.max_scroll > 0 {
+                hints.push(("j/k", "scroll"));
+                hints.push(("Ctrl-d/u", "half page"));
+                hints.push(("gg/G", "top/bottom"));
+            }
+            hints.push(("h", "focus menu"));
+        }
+    }
+
+    hints.push(("x", if app.no_rain { "rain on" } else { "rain off" }));
+
+    if app.current().is_dir() {
+        hints.push(("Space/Enter", "open"));
+    }
+    if !app.path.is_empty() {
+        hints.push(("Backspace", "back"));
+    }
+
+    // Key in LightCyan, then what it does, with a gap between hints.
+    let mut spans = Vec::new();
+    for (i, (key, action)) in hints.into_iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::raw("   "));
+        }
+        spans.push(Span::styled(key, Style::new().fg(Color::LightCyan).bold()));
+        spans.push(Span::raw(format!(" {action}")));
+    }
+
+    // A `Text` is a list of lines, so the note always starts on the next line.
+    let note = Line::from(vec![
+        Span::styled("Note:", Style::new().fg(Color::LightCyan).bold()),
+        Span::raw(" Mouse actions also work!"),
+    ]);
+    Text::from(vec![Line::from(spans), note])
 }
