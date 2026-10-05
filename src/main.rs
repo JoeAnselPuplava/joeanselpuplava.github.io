@@ -1,39 +1,43 @@
-use ratzilla::ratatui::{
-    Terminal,
-    layout::{Alignment, Constraint, Rect},
-    style::Color,
-    widgets::{Block, Paragraph},
-};
-use std::cell::RefCell;
+//! Entry point. Sets up the browser terminal and runs the draw loop.
+
+use ratzilla::ratatui::Terminal;
+
 use std::io;
-use std::rc::Rc;
 use web_time::Instant;
 
-use ratzilla::{DomBackend, WebGl2Backend, WebRenderer, event::KeyCode};
+use ratzilla::{DomBackend, WebRenderer};
 
-mod home;
-mod rain;
+use crate::event::EventHandler;
+
+pub mod app; // state
+pub mod event; // input
+pub mod home; // main layout
+pub mod rain; // background animation
+pub mod update; // key bindings
 
 fn main() -> io::Result<()> {
-    let counter = Rc::new(RefCell::new(0));
-    // let backend = WebGl2Backend::new()?;
+    // DomBackend draws with HTML elements. To try GPU rendering instead,
+    // import WebGl2Backend and use: let backend = WebGl2Backend::new()?;
     let backend = DomBackend::new()?;
     let mut terminal = Terminal::new(backend)?;
     let start_time = Instant::now();
 
-    terminal.on_key_event({
-        let counter_cloned = counter.clone();
-        move |key_event| {
-            if key_event.code == KeyCode::Char(' ') {
-                let mut counter = counter_cloned.borrow_mut();
-                *counter += 1;
+    let mut app = app::App::new();
+    let mut events = EventHandler::new(&mut terminal, 250)?;
+
+    // Runs once per browser animation frame (~60 times a second).
+    terminal.draw_web(move |f| {
+        // 1. Apply any input that arrived since the last frame.
+        for e in events.drain() {
+            match e {
+                event::Event::Key(key) => update::update(&mut app, key),
+                event::Event::Tick => app.tick(),
+                event::Event::Mouse(_) => {}
             }
         }
-    })?;
-
-    terminal.draw_web(move |f| {
+        // 2. Draw: rain first so the home screen sits on top of it.
         rain::view(f, start_time.elapsed());
-        home::draw(f);
+        home::draw(f, &app);
     });
 
     Ok(())

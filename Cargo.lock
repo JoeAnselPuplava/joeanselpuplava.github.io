@@ -393,6 +393,7 @@ dependencies = [
  "critical-section",
  "ratzilla",
  "tui-rain",
+ "wasm-bindgen",
  "web-time",
 ]
 
