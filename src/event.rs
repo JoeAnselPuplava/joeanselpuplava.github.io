@@ -22,6 +22,9 @@ pub enum Event {
     /// Left click. `x`/`y` are fractions (0.0-1.0) across and down the
     /// terminal grid; `main.rs` turns them into a cell using the current size.
     Click { x: f64, y: f64 },
+    /// Left double-click, positioned like `Click`. The browser sends two
+    /// `Click`s before this one.
+    DoubleClick { x: f64, y: f64 },
     /// Mouse wheel over the grid: `lines` to scroll (positive = down), with
     /// the pointer position as fractions like `Click`.
     Scroll { x: f64, y: f64, lines: i32 },
@@ -63,20 +66,26 @@ impl EventHandler {
         // Clicks are also listened for on the whole document, for the same
         // resize reason. The grid is looked up on every click so it is never
         // the stale, replaced element.
-        let click_tx = sender.clone();
-        let click_doc = document.clone();
-        let on_click = Closure::<dyn FnMut(MouseEvent)>::new(move |e: MouseEvent| {
-            if e.button() != 0 {
-                return; // left button only
-            }
-            if let Some((x, y)) = grid_fraction(&click_doc, &e) {
-                let _ = click_tx.send(Event::Click { x, y });
-            }
-        });
-        document
-            .add_event_listener_with_callback("click", on_click.as_ref().unchecked_ref())
-            .map_err(|e| std::io::Error::other(format!("{e:?}")))?;
-        on_click.forget();
+        let click_kinds: [(&str, fn(f64, f64) -> Event); 2] = [
+            ("click", |x, y| Event::Click { x, y }),
+            ("dblclick", |x, y| Event::DoubleClick { x, y }),
+        ];
+        for (event_type, make_event) in click_kinds {
+            let click_tx = sender.clone();
+            let click_doc = document.clone();
+            let on_click = Closure::<dyn FnMut(MouseEvent)>::new(move |e: MouseEvent| {
+                if e.button() != 0 {
+                    return; // left button only
+                }
+                if let Some((x, y)) = grid_fraction(&click_doc, &e) {
+                    let _ = click_tx.send(make_event(x, y));
+                }
+            });
+            document
+                .add_event_listener_with_callback(event_type, on_click.as_ref().unchecked_ref())
+                .map_err(|e| std::io::Error::other(format!("{e:?}")))?;
+            on_click.forget();
+        }
 
         // Mouse wheel. Trackpads send many tiny pixel deltas, so add them up
         // and only scroll once they reach a whole line.

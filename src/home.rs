@@ -8,13 +8,26 @@ use ratzilla::ratatui::{
     },
     style::{Color, Style},
     symbols::merge::MergeStrategy,
-    text::Text,
+    text::{Line, Span, Text},
     widgets::{
         Block, Clear, List, ListState, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
+        Wrap,
     },
 };
 
-use crate::app::{App, MENU, Pane};
+use crate::app::{App, Entry, Pane};
+
+/// Added after a directory's name in the menu. Try " ▸", " ›" or " ⏵".
+const DIR_MARKER: &str = "/";
+
+/// An entry's name as listed: directories get DIR_MARKER.
+fn label(entry: &Entry) -> String {
+    if entry.is_dir() {
+        format!("{}{DIR_MARKER}", entry.title)
+    } else {
+        entry.title.to_string()
+    }
+}
 
 /// Where each part of the home screen sits on the terminal grid.
 pub struct Areas {
@@ -50,22 +63,70 @@ pub fn layout(screen: Rect) -> Areas {
     }
 }
 
-/// Text for menu entry `index`. Placeholder for now: replace with your real
-/// pages. Lines are not wrapped, so break long paragraphs with `\n` yourself.
-pub fn page_text(index: usize) -> String {
-    let mut text = format!("Content for {}\n\n", MENU[index]);
-    for n in 1..=40 {
-        text.push_str(&format!("Placeholder line {n}\n"));
-    }
-    text
+/// The menu's title, e.g. "Home/Projects". Every part except the last (where
+/// we already are) is underlined to show it can be clicked to go back.
+fn breadcrumb(app: &App) -> Line<'static> {
+    let parts = app.breadcrumb();
+    let last = parts.len() - 1;
+    let spans = parts.into_iter().enumerate().map(|(i, part)| {
+        if i < last {
+            Span::styled(part, Style::new().underlined())
+        } else {
+            Span::raw(part)
+        }
+    });
+    Line::from_iter(spans)
 }
 
-/// How far the content pane can scroll: the lines that don't fit in the
-/// pane. 0 means everything fits, so it can't scroll at all.
-pub fn max_scroll(index: usize, areas: &Areas) -> u16 {
-    let lines = page_text(index).lines().count();
-    let visible = areas.content.height.saturating_sub(2) as usize; // minus top/bottom border
-    lines.saturating_sub(visible).try_into().unwrap_or(u16::MAX)
+/// Text for an entry. Placeholder for now: replace with your real pages.
+/// Each `Line` is a paragraph; long ones wrap to fit the content pane.
+/// Use `Span::styled` to color part of a line.
+pub fn page_text(entry: &Entry) -> Text<'static> {
+    // A directory previews what's inside it.
+    if entry.is_dir() {
+        let mut lines = vec![
+            Line::raw(label(entry)),
+            Line::raw(""),
+            Line::from(vec![
+                Span::raw(
+                    "Press Space or Enter to open. To come back to the home page \
+                     press BackSpace or click on ",
+                ),
+                Span::styled("Home/", Style::new().fg(Color::LightCyan).underlined()),
+                Span::raw(" at the top left."),
+            ]),
+            Line::raw(""),
+        ];
+        for child in entry.children {
+            lines.push(Line::raw(format!("  {}", label(child))));
+        }
+        return Text::from(lines);
+    }
+    let mut lines = vec![
+        Line::raw(format!("Content for {}", entry.title)),
+        Line::raw(""),
+    ];
+    for n in 1..=40 {
+        lines.push(Line::raw(format!("Placeholder line {n}")));
+    }
+    Text::from(lines)
+}
+
+/// The content pane's text, wrapped at word boundaries. `trim: false` keeps
+/// leading spaces, so indented lines stay indented.
+fn content_paragraph(entry: &Entry) -> Paragraph<'static> {
+    Paragraph::new(page_text(entry)).wrap(Wrap { trim: false })
+}
+
+/// How far the content pane can scroll: the lines (after wrapping) that
+/// don't fit in the pane. 0 means everything fits, so it can't scroll at all.
+pub fn max_scroll(entry: &Entry, areas: &Areas) -> u16 {
+    let inner = areas.content.inner(Margin::new(1, 1)); // inside the border
+    let lines = content_paragraph(entry).line_count(inner.width);
+    lines
+        .saturating_sub(inner.height as usize)
+        .try_into()
+        .unwrap_or(u16::MAX)
 }
 
 /// Draws the home screen from the current `App` state.
@@ -95,9 +156,10 @@ pub fn draw(frame: &mut Frame, app: &App) {
     };
 
     // Left pane: menu with the selected item highlighted
-    let list = List::new(MENU.iter().copied())
+    let list = List::new(app.menu().iter().map(label))
         .block(
             Block::bordered()
+                .title(breadcrumb(app))
                 .merge_borders(MergeStrategy::Exact)
                 .border_style(focused(Pane::Menu)),
         )
@@ -107,7 +169,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
     frame.render_stateful_widget(list, left_area, &mut state);
 
     // Right pane: content for the selected item, scrolled
-    let content = Paragraph::new(page_text(app.selected))
+    let content = content_paragraph(app.current())
         .block(
             Block::bordered()
                 .merge_borders(MergeStrategy::Exact)

@@ -1,7 +1,50 @@
 //! Application state: everything the UI needs to know to draw a frame.
 
-/// Entries shown in the left-hand menu. Add a string here to add a page.
-pub const MENU: &[&str] = &["About", "Projects", "Experience", "Contact"];
+use std::collections::HashMap;
+
+/// One item in a menu: either a page, or a directory holding a sub-menu.
+#[derive(Debug)]
+pub struct Entry {
+    pub title: &'static str,
+    /// Sub-menu entries. Empty for a normal page.
+    pub children: &'static [Entry],
+}
+
+impl Entry {
+    /// A normal page.
+    pub const fn page(title: &'static str) -> Self {
+        Self { title, children: &[] }
+    }
+
+    /// A directory: Space opens its sub-menu, Backspace comes back.
+    pub const fn dir(title: &'static str, children: &'static [Entry]) -> Self {
+        Self { title, children }
+    }
+
+    /// A directory with no children counts as a page, since there is nothing to open.
+    pub fn is_dir(&self) -> bool {
+        !self.children.is_empty()
+    }
+}
+
+/// Name of the top-level menu in the breadcrumb. Click it to go back there.
+pub const HOME_LABEL: &str = "Home";
+
+/// The top-level ("Home") menu. Add `Entry::page` / `Entry::dir` items here;
+/// directories can be nested as deep as you like.
+pub const MENU: &[Entry] = &[
+    Entry::page("About"),
+    Entry::dir(
+        "Projects",
+        &[
+            Entry::page("Portfolio Website"),
+            Entry::page("Project Two"),
+            Entry::page("Project Three"),
+        ],
+    ),
+    Entry::page("Experience"),
+    Entry::page("Contact"),
+];
 
 /// Which pane currently receives movement keys (j/k/gg/G).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -15,9 +58,10 @@ pub enum Pane {
 #[derive(Debug, Default)]
 pub struct App {
     pub focus: Pane,           // pane that j/k act on
-    pub selected: usize,       // highlighted menu item (index into MENU)
+    pub path: Vec<usize>,      // directories opened, as indices from MENU down (empty = Home)
+    pub selected: usize,       // highlighted item in the current menu
     pub scroll: u16,           // scroll offset of the page being shown
-    pub saved_scroll: [u16; MENU.len()], // where each page was left, restored by `select`
+    pub saved_scroll: HashMap<Vec<usize>, u16>, // where each page was left, keyed by `key()`
     pub max_scroll: u16,       // furthest `scroll` can go; set every frame in main.rs
     pub count: Option<usize>,  // count typed before a motion, e.g. the 5 in "5j"
     pub pending: Option<char>, // first key of a two-key motion, e.g. the first g of "gg"
@@ -34,7 +78,7 @@ impl App {
     /// Move down `n` lines: next menu item, or scroll the content.
     pub fn move_down(&mut self, n: usize) {
         match self.focus {
-            Pane::Menu => self.select((self.selected + n).min(MENU.len() - 1)),
+            Pane::Menu => self.select((self.selected + n).min(self.menu().len() - 1)),
             Pane::Content => self.scroll_by(n as i32),
         }
     }
@@ -58,19 +102,86 @@ impl App {
     /// `G`: jump to the bottom of the focused pane.
     pub fn bottom(&mut self) {
         match self.focus {
-            Pane::Menu => self.select(MENU.len() - 1),
+            Pane::Menu => self.select(self.menu().len() - 1),
             Pane::Content => self.scroll = self.max_scroll,
         }
     }
 
-    /// Shows menu entry `index`, returning to wherever that page was last
-    /// scrolled to. The current page's position is saved first.
+    /// The menu currently listed on the left: MENU, or an opened directory's children.
+    pub fn menu(&self) -> &'static [Entry] {
+        self.path.iter().fold(MENU, |menu, &i| menu[i].children)
+    }
+
+    /// The highlighted entry, whose page is shown on the right.
+    pub fn current(&self) -> &'static Entry {
+        &self.menu()[self.selected]
+    }
+
+    /// Where we are, for the menu's title: "Home", then "/Name" for each
+    /// opened directory. Part `i` is the menu at depth `i`, so clicking it
+    /// can call `go_to_depth(i)`.
+    pub fn breadcrumb(&self) -> Vec<String> {
+        let mut parts = vec![HOME_LABEL.to_string()];
+        let mut menu = MENU;
+        for &i in &self.path {
+            parts.push(format!("/{}", menu[i].title));
+            menu = menu[i].children;
+        }
+        parts
+    }
+
+    /// Goes back up until `depth` directories are open (0 = Home), leaving
+    /// the directory we came out of highlighted.
+    pub fn go_to_depth(&mut self, depth: usize) {
+        while self.path.len() > depth {
+            self.leave();
+        }
+    }
+
+    /// Shows entry `index` of the current menu, returning to wherever that
+    /// page was last scrolled to. The current page's position is saved first.
     pub fn select(&mut self, index: usize) {
         if index != self.selected {
-            self.saved_scroll[self.selected] = self.scroll;
+            self.save_scroll();
             self.selected = index;
-            self.scroll = self.saved_scroll[index];
+            self.load_scroll();
         }
+    }
+
+    /// Space: if the highlighted entry is a directory, list its contents.
+    pub fn enter(&mut self) {
+        if self.current().is_dir() {
+            self.save_scroll();
+            self.path.push(self.selected);
+            self.selected = 0;
+            self.load_scroll();
+            self.focus = Pane::Menu;
+        }
+    }
+
+    /// Backspace: go back to the parent menu, with the directory we left highlighted.
+    pub fn leave(&mut self) {
+        self.save_scroll(); // before popping, so it's saved under this page's key
+        if let Some(dir) = self.path.pop() {
+            self.selected = dir;
+            self.load_scroll();
+            self.focus = Pane::Menu;
+        }
+    }
+
+    /// Identifies the highlighted page across all menus: the path plus its index.
+    fn key(&self) -> Vec<usize> {
+        let mut key = self.path.clone();
+        key.push(self.selected);
+        key
+    }
+
+    fn save_scroll(&mut self) {
+        self.saved_scroll.insert(self.key(), self.scroll);
+    }
+
+    fn load_scroll(&mut self) {
+        self.scroll = self.saved_scroll.get(&self.key()).copied().unwrap_or(0);
     }
 
     /// Scrolls the content by `lines` (negative = up), staying within

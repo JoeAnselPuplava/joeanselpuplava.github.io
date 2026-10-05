@@ -391,6 +391,7 @@ name = "portfolio"
 version = "0.1.0"
 dependencies = [
  "critical-section",
+ "ratatui",
  "ratzilla",
  "tui-rain",
  "wasm-bindgen",
