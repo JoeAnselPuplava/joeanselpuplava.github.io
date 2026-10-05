@@ -50,10 +50,21 @@ pub fn click(app: &mut App, col: u16, row: u16, areas: &Areas) {
         if let Some(index) = row.checked_sub(areas.menu.y + 1).map(usize::from)
             && index < MENU.len()
         {
-            app.selected = index;
-            app.scroll = 0;
+            app.select(index);
         }
     } else if areas.content.contains(pos) {
         app.focus = Pane::Content;
+    }
+}
+
+/// Handles the mouse wheel at cell (`col`, `row`): over the content it scrolls
+/// the text, over the menu it moves the selection. Focus doesn't change.
+pub fn scroll(app: &mut App, col: u16, row: u16, lines: i32, areas: &Areas) {
+    let pos = Position::new(col, row);
+    if areas.content.contains(pos) {
+        app.scroll_by(lines);
+    } else if areas.menu.contains(pos) {
+        let index = (app.selected as i32 + lines).clamp(0, MENU.len() as i32 - 1);
+        app.select(index as usize);
     }
 }

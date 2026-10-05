@@ -31,6 +31,7 @@ fn main() -> io::Result<()> {
         // mapped to cells using this frame's size and layout.
         let size = f.area();
         let areas = home::layout(size);
+        app.set_max_scroll(home::max_scroll(app.selected, &areas));
         for e in events.drain() {
             match e {
                 event::Event::Key(key) => update::update(&mut app, key),
@@ -39,9 +40,16 @@ fn main() -> io::Result<()> {
                     let row = (y * size.height as f64) as u16;
                     update::click(&mut app, col, row, &areas);
                 }
+                event::Event::Scroll { x, y, lines } => {
+                    let col = (x * size.width as f64) as u16;
+                    let row = (y * size.height as f64) as u16;
+                    update::scroll(&mut app, col, row, lines, &areas);
+                }
                 event::Event::Tick => app.tick(),
             }
         }
+        // The page may have changed above, so update the limit before drawing.
+        app.set_max_scroll(home::max_scroll(app.selected, &areas));
         // 2. Draw: rain first so the home screen sits on top of it.
         rain::view(f, start_time.elapsed());
         home::draw(f, &app);

@@ -9,3 +9,4 @@ critical-section = { version = "1.2", features = ["std"] }
 web-time = "1.1.0"
 tui-rain = { git = "https://github.com/SuperJappie08/tui-rain", rev = "8a1f6f4a10508778daf6da9614cdbef31f968779" }
 wasm-bindgen = "0.2"
+web-sys = { version = "0.3", features = ["WheelEvent"] }

@@ -3,12 +3,15 @@
 
 use ratzilla::{
     event::KeyEvent,
-    web_sys::{self, KeyboardEvent, MouseEvent},
+    web_sys::{self, KeyboardEvent, MouseEvent, WheelEvent},
 };
 use std::sync::mpsc;
 use wasm_bindgen::{JsCast, closure::Closure};
 // std::time::Instant panics in the browser; web_time works on wasm.
 use web_time::{Duration, Instant};
+
+/// Wheel distance (in pixels) that scrolls one line. Lower = faster scrolling.
+const PX_PER_LINE: f64 = 20.0;
 
 /// Everything the app reacts to.
 #[derive(Clone, Debug)]
@@ -19,6 +22,9 @@ pub enum Event {
     /// Left click. `x`/`y` are fractions (0.0-1.0) across and down the
     /// terminal grid; `main.rs` turns them into a cell using the current size.
     Click { x: f64, y: f64 },
+    /// Mouse wheel over the grid: `lines` to scroll (positive = down), with
+    /// the pointer position as fractions like `Click`.
+    Scroll { x: f64, y: f64, lines: i32 },
 }
 
 /// Collects browser input events so the render loop can handle them in order.
@@ -57,20 +63,13 @@ impl EventHandler {
         // Clicks are also listened for on the whole document, for the same
         // resize reason. The grid is looked up on every click so it is never
         // the stale, replaced element.
-        let click_tx = sender;
+        let click_tx = sender.clone();
         let click_doc = document.clone();
         let on_click = Closure::<dyn FnMut(MouseEvent)>::new(move |e: MouseEvent| {
             if e.button() != 0 {
                 return; // left button only
             }
-            let Some(grid) = click_doc.get_element_by_id("grid") else {
-                return;
-            };
-            let rect = grid.get_bounding_client_rect();
-            let x = (e.client_x() as f64 - rect.left()) / rect.width();
-            let y = (e.client_y() as f64 - rect.top()) / rect.height();
-            // Ignore clicks outside the grid (this also skips NaN from a 0-size rect).
-            if (0.0..1.0).contains(&x) && (0.0..1.0).contains(&y) {
+            if let Some((x, y)) = grid_fraction(&click_doc, &e) {
                 let _ = click_tx.send(Event::Click { x, y });
             }
         });
@@ -78,6 +77,31 @@ impl EventHandler {
             .add_event_listener_with_callback("click", on_click.as_ref().unchecked_ref())
             .map_err(|e| std::io::Error::other(format!("{e:?}")))?;
         on_click.forget();
+
+        // Mouse wheel. Trackpads send many tiny pixel deltas, so add them up
+        // and only scroll once they reach a whole line.
+        let wheel_tx = sender;
+        let wheel_doc = document.clone();
+        let mut pending_px = 0.0;
+        let on_wheel = Closure::<dyn FnMut(WheelEvent)>::new(move |e: WheelEvent| {
+            let Some((x, y)) = grid_fraction(&wheel_doc, &e) else {
+                return;
+            };
+            pending_px += match e.delta_mode() {
+                WheelEvent::DOM_DELTA_LINE => e.delta_y() * PX_PER_LINE,
+                WheelEvent::DOM_DELTA_PAGE => e.delta_y() * PX_PER_LINE * 10.0,
+                _ => e.delta_y(), // DOM_DELTA_PIXEL
+            };
+            let lines = (pending_px / PX_PER_LINE).trunc();
+            if lines != 0.0 {
+                pending_px -= lines * PX_PER_LINE;
+                let _ = wheel_tx.send(Event::Scroll { x, y, lines: lines as i32 });
+            }
+        });
+        document
+            .add_event_listener_with_callback("wheel", on_wheel.as_ref().unchecked_ref())
+            .map_err(|e| std::io::Error::other(format!("{e:?}")))?;
+        on_wheel.forget();
 
         Ok(Self {
             receiver,
@@ -96,4 +120,15 @@ impl EventHandler {
         }
         events
     }
+}
+
+/// Where the pointer is over the terminal grid, as fractions (0.0-1.0) of its
+/// width and height. `None` when outside the grid. The grid is looked up each
+/// time because DomBackend replaces it on resize.
+fn grid_fraction(document: &web_sys::Document, e: &MouseEvent) -> Option<(f64, f64)> {
+    let rect = document.get_element_by_id("grid")?.get_bounding_client_rect();
+    let x = (e.client_x() as f64 - rect.left()) / rect.width();
+    let y = (e.client_y() as f64 - rect.top()) / rect.height();
+    // The range check also rejects NaN from a 0-size rect.
+    ((0.0..1.0).contains(&x) && (0.0..1.0).contains(&y)).then_some((x, y))
 }

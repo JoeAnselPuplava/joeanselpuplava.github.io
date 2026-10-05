@@ -4,12 +4,14 @@ use ratzilla::ratatui::{
     Frame,
     layout::{
         Constraint::{self, Percentage, Ratio},
-        Layout, Rect, Spacing,
+        Layout, Margin, Rect, Spacing,
     },
     style::{Color, Style},
     symbols::merge::MergeStrategy,
     text::Text,
-    widgets::{Block, Clear, List, ListState, Paragraph},
+    widgets::{
+        Block, Clear, List, ListState, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
+    },
 };
 
 use crate::app::{App, MENU, Pane};
@@ -46,6 +48,24 @@ pub fn layout(screen: Rect) -> Areas {
         content: right_area,
         status: status_area,
     }
+}
+
+/// Text for menu entry `index`. Placeholder for now: replace with your real
+/// pages. Lines are not wrapped, so break long paragraphs with `\n` yourself.
+pub fn page_text(index: usize) -> String {
+    let mut text = format!("Content for {}\n\n", MENU[index]);
+    for n in 1..=40 {
+        text.push_str(&format!("Placeholder line {n}\n"));
+    }
+    text
+}
+
+/// How far the content pane can scroll: the lines that don't fit in the
+/// pane. 0 means everything fits, so it can't scroll at all.
+pub fn max_scroll(index: usize, areas: &Areas) -> u16 {
+    let lines = page_text(index).lines().count();
+    let visible = areas.content.height.saturating_sub(2) as usize; // minus top/bottom border
+    lines.saturating_sub(visible).try_into().unwrap_or(u16::MAX)
 }
 
 /// Draws the home screen from the current `App` state.
@@ -87,7 +107,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
     frame.render_stateful_widget(list, left_area, &mut state);
 
     // Right pane: content for the selected item, scrolled
-    let content = Paragraph::new(format!("Content for {}", MENU[app.selected]))
+    let content = Paragraph::new(page_text(app.selected))
         .block(
             Block::bordered()
                 .merge_borders(MergeStrategy::Exact)
@@ -95,6 +115,23 @@ pub fn draw(frame: &mut Frame, app: &App) {
         )
         .scroll((app.scroll, 0));
     frame.render_widget(content, right_area);
+
+    // Scroll indicator on the content pane's right border, only when there is
+    // more text than fits. The thumb's size shows how much of the page is visible.
+    if app.max_scroll > 0 {
+        let visible = right_area.height.saturating_sub(2) as usize;
+        let mut scrollbar_state = ScrollbarState::new(app.max_scroll as usize + 1)
+            .position(app.scroll as usize)
+            .viewport_content_length(visible);
+        frame.render_stateful_widget(
+            Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(None)
+                .end_symbol(None),
+            // Stay between the top and bottom corners of the border.
+            right_area.inner(Margin::new(0, 1)),
+            &mut scrollbar_state,
+        );
+    }
 
     // Status bar: like vim's showcmd, display the count or "g" being typed
     let typed = format!(
