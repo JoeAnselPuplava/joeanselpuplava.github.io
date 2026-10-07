@@ -18,6 +18,7 @@ use ratzilla::ratatui::{
 };
 
 use crate::app::{App, Entry, Pane};
+use crate::content::child_link;
 /// Added after a directory's name in the menu. Try " ▸", " ›" or " ⏵".
 const DIR_MARKER: &str = "/";
 
@@ -90,16 +91,23 @@ pub fn page_text(entry: &Entry) -> Text<'static> {
             Line::raw(""),
             Line::from(vec![
                 Span::raw(
-                    "Press Space or Enter to open. To come back to the home page \
-                     press BackSpace or click on ",
+                    "Press Space or Enter to open, or click one of the links below. \
+                     To come back to the home page press BackSpace or click on ",
                 ),
                 Span::styled("Home/", Style::new().fg(Color::LightCyan).underlined()),
                 Span::raw(" at the top left."),
             ]),
             Line::raw(""),
         ];
-        for child in entry.children {
-            lines.push(Line::raw(format!("  {}", label(child))));
+        // Each entry is a link that opens it. DIR_MARKER stays outside the
+        // link because `child_link` needs text that lives for the whole program.
+        for (i, child) in entry.children.iter().enumerate() {
+            let marker = if child.is_dir() { DIR_MARKER } else { "" };
+            lines.push(Line::from(vec![
+                Span::raw("  "),
+                child_link(child.title, i),
+                Span::raw(marker),
+            ]));
         }
         return Text::from(lines);
     }

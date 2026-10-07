@@ -6,6 +6,7 @@ use std::io;
 
 use ratzilla::{DomBackend, WebRenderer};
 
+use crate::content::Target;
 use crate::event::EventHandler;
 use web_time::Instant;
 
@@ -46,10 +47,10 @@ fn main() -> io::Result<()> {
                 event::Event::Click { x, y } => {
                     let col = (x * size.width as f64) as u16;
                     let row = (y * size.height as f64) as u16;
-                    if let Some(url) = content::link_at(f.buffer_mut(), col, row) {
-                        content::open_link(url);
-                    } else {
-                        update::click(&mut app, col, row, &areas);
+                    match content::link_at(f.buffer_mut(), col, row) {
+                        Some(Target::Url(url)) => content::open_link(url),
+                        Some(Target::Child(index)) => app.open_child(index),
+                        None => update::click(&mut app, col, row, &areas),
                     }
                 }
                 event::Event::DoubleClick { x, y } => {

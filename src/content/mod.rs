@@ -91,9 +91,20 @@ pub fn labeled_bullet(label: &'static str, text: &'static str) -> Line<'static> 
 /// used because the DOM backend doesn't draw it, so it changes nothing visually.
 const LINK_MARKER: Modifier = Modifier::SLOW_BLINK;
 
+/// Where a link goes when it's clicked. `main.rs` matches on this.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Target {
+    /// A web page or `mailto:` address, opened with `open_link`.
+    Url(&'static str),
+    /// Entry `index` of the directory whose preview is showing. Clicking it
+    /// opens the directory and shows that entry (`App::open_child`).
+    Child(usize),
+}
+
 thread_local! {
-    /// Link text -> URL, filled in by `link()` as pages are drawn.
-    static LINKS: RefCell<HashMap<&'static str, &'static str>> = RefCell::new(HashMap::new());
+    /// Link text -> where it goes, filled in by `link()` and `child_link()`
+    /// as pages are drawn.
+    static LINKS: RefCell<HashMap<&'static str, Target>> = RefCell::new(HashMap::new());
 }
 
 /// A clickable link showing `text` that opens `url`. Use it inside a line:
@@ -102,17 +113,28 @@ thread_local! {
 ///
 /// Links are found by their text, so give each link on the site its own text.
 pub fn link(text: &'static str, url: &'static str) -> Span<'static> {
-    LINKS.with_borrow_mut(|links| links.insert(text, url));
+    link_span(text, Target::Url(url))
+}
+
+/// A link to entry `index` of the directory being previewed, e.g. one of the
+/// projects listed when "Projects/" is highlighted. Used by `home::page_text`.
+pub fn child_link(text: &'static str, index: usize) -> Span<'static> {
+    link_span(text, Target::Child(index))
+}
+
+/// Remembers where `text` leads and styles it as a link.
+fn link_span(text: &'static str, target: Target) -> Span<'static> {
+    LINKS.with_borrow_mut(|links| links.insert(text, target));
     Span::styled(
         text,
         Style::new().fg(Color::LightCyan).underlined().add_modifier(LINK_MARKER),
     )
 }
 
-/// The URL of the link drawn at cell (`col`, `row`) of `buf`, if any. Reads
-/// the link's text back from the screen, so it works wherever wrapping and
-/// scrolling put it.
-pub fn link_at(buf: &Buffer, col: u16, row: u16) -> Option<&'static str> {
+/// Where the link drawn at cell (`col`, `row`) of `buf` goes, if there is
+/// one. Reads the link's text back from the screen, so it works wherever
+/// wrapping and scrolling put it.
+pub fn link_at(buf: &Buffer, col: u16, row: u16) -> Option<Target> {
     let is_link = |x: u16| {
         buf.cell((x, row))
             .is_some_and(|cell| cell.modifier.contains(LINK_MARKER))
@@ -138,7 +160,7 @@ pub fn link_at(buf: &Buffer, col: u16, row: u16) -> Option<&'static str> {
             // each, so fall back to the link that contains this part.
             let mut matches = links.iter().filter(|(full, _)| full.contains(text));
             match (matches.next(), matches.next()) {
-                (Some((_, url)), None) => Some(*url),
+                (Some((_, target)), None) => Some(*target),
                 _ => None,
             }
         })

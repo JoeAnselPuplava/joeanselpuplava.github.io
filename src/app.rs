@@ -159,6 +159,20 @@ impl App {
         }
     }
 
+    /// Clicking a link in a directory's preview: opens the directory and
+    /// shows its entry `index`, like Space and then moving down to it. Focus
+    /// goes to the content, where the click was, so j/k scroll the new page.
+    pub fn open_child(&mut self, index: usize) {
+        // Two clicks can arrive in one frame and both hit the same link, so
+        // the second one finds the directory already open. Do nothing then.
+        if !self.current().is_dir() {
+            return;
+        }
+        self.enter();
+        self.select(index.min(self.menu().len() - 1));
+        self.focus = Pane::Content;
+    }
+
     /// Backspace: go back to the parent menu, with the directory we left highlighted.
     pub fn leave(&mut self) {
         self.save_scroll(); // before popping, so it's saved under this page's key
@@ -195,5 +209,29 @@ impl App {
     pub fn set_max_scroll(&mut self, max: u16) {
         self.max_scroll = max;
         self.scroll = self.scroll.min(max);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn open_child_opens_the_directory_and_shows_that_entry() {
+        // Highlight the first directory on the home menu ("Projects/").
+        let dir = MENU.iter().position(Entry::is_dir).unwrap();
+        let last = MENU[dir].children.len() - 1;
+        let mut app = App::new();
+        app.select(dir);
+
+        app.open_child(last);
+        assert_eq!(app.path, [dir]);
+        assert_eq!(app.selected, last);
+        assert_eq!(app.focus, Pane::Content);
+
+        // A second click on the same link (same frame) changes nothing.
+        app.open_child(0);
+        assert_eq!(app.path, [dir]);
+        assert_eq!(app.selected, last);
     }
 }
