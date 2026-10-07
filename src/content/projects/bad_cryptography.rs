@@ -22,17 +22,34 @@ pub fn text() -> Text<'static> {
         ),
         Line::raw(""),
         section("Levels"),
-        labeled_bullet("Level 0:", "a warm-up on checking a flag against its SHA-256 hash"),
-        labeled_bullet("Level 1:", "frames \"encrypted\" with a single-byte XOR and a hardcoded key"),
-        labeled_bullet("Level 2:", "real AES-CBC, but with the key and IV hardcoded into the secrets generator"),
-        labeled_bullet("Level 3:", "AES in ECB mode, where encrypted blocks can be swapped between channels"),
-        labeled_bullet("Level 4:", "AES-GCM with a fixed nonce, so every frame reuses the same keystream"),
+        labeled_bullet(
+            "Level 0:",
+            "a warm-up on checking a flag against its SHA-256 hash",
+        ),
+        labeled_bullet(
+            "Level 1:",
+            "frames \"encrypted\" with a single-byte XOR and a hardcoded key",
+        ),
+        labeled_bullet(
+            "Level 2:",
+            "real AES-CBC, but with the key and IV hardcoded into the secrets generator",
+        ),
+        labeled_bullet(
+            "Level 3:",
+            "AES in ECB mode, where encrypted blocks can be swapped between channels",
+        ),
+        labeled_bullet(
+            "Level 4:",
+            "AES-GCM with a fixed nonce, so every frame reuses the same keystream",
+        ),
         Line::raw(""),
         Line::raw(
             "Every level includes the decoder's source code (no security by obscurity) and a set of hints that reveal a little more each time.",
         ),
         Line::raw(""),
         section("Takeaway"),
-        Line::raw("Using a strong cipher doesn't make a system secure. These designs all used standard algorithms and still fell apart because of how they were used."),
+        Line::raw(
+            "Using a strong cipher doesn't make a system secure. Understanding the pros/cons of each crypotographic protocol and how to properly use them are essential to success. These designs all used standard algorithms and still fell apart because of how they were used.",
+        ),
     ])
 }
