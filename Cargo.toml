@@ -11,3 +11,4 @@ tui-rain = { git = "https://github.com/SuperJappie08/tui-rain", rev = "8a1f6f4a1
 wasm-bindgen = "0.2"
 web-sys = { version = "0.3", features = ["WheelEvent"] }
 ratatui = { version = "0.30", default-features = false, features = ["unstable-rendered-line-info"] }
+unicode-width = "0.2"

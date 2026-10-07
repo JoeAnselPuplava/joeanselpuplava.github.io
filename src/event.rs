@@ -21,13 +21,23 @@ pub enum Event {
     Key(KeyEvent),
     /// Left click. `x`/`y` are fractions (0.0-1.0) across and down the
     /// terminal grid; `main.rs` turns them into a cell using the current size.
-    Click { x: f64, y: f64 },
+    Click {
+        x: f64,
+        y: f64,
+    },
     /// Left double-click, positioned like `Click`. The browser sends two
     /// `Click`s before this one.
-    DoubleClick { x: f64, y: f64 },
+    DoubleClick {
+        x: f64,
+        y: f64,
+    },
     /// Mouse wheel over the grid: `lines` to scroll (positive = down), with
     /// the pointer position as fractions like `Click`.
-    Scroll { x: f64, y: f64, lines: i32 },
+    Scroll {
+        x: f64,
+        y: f64,
+        lines: i32,
+    },
 }
 
 /// Collects browser input events so the render loop can handle them in order.
@@ -104,7 +114,11 @@ impl EventHandler {
             let lines = (pending_px / PX_PER_LINE).trunc();
             if lines != 0.0 {
                 pending_px -= lines * PX_PER_LINE;
-                let _ = wheel_tx.send(Event::Scroll { x, y, lines: lines as i32 });
+                let _ = wheel_tx.send(Event::Scroll {
+                    x,
+                    y,
+                    lines: lines as i32,
+                });
             }
         });
         document
@@ -135,7 +149,9 @@ impl EventHandler {
 /// width and height. `None` when outside the grid. The grid is looked up each
 /// time because DomBackend replaces it on resize.
 fn grid_fraction(document: &web_sys::Document, e: &MouseEvent) -> Option<(f64, f64)> {
-    let rect = document.get_element_by_id("grid")?.get_bounding_client_rect();
+    let rect = document
+        .get_element_by_id("grid")?
+        .get_bounding_client_rect();
     let x = (e.client_x() as f64 - rect.left()) / rect.width();
     let y = (e.client_y() as f64 - rect.top()) / rect.height();
     // The range check also rejects NaN from a 0-size rect.

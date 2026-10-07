@@ -103,27 +103,28 @@ pub fn page_text(entry: &Entry) -> Text<'static> {
         }
         return Text::from(lines);
     }
-    let mut lines = vec![
-        Line::raw(format!("Content for {}", entry.title)),
-        Line::raw(""),
-    ];
-    for n in 1..=40 {
-        lines.push(Line::raw(format!("Placeholder line {n}")));
-    }
-    Text::from(lines)
+    // A page's text comes from its file in src/content/.
+    (entry.text)()
 }
 
-/// The content pane's text, wrapped at word boundaries. `trim: false` keeps
-/// leading spaces, so indented lines stay indented.
-fn content_paragraph(entry: &Entry) -> Paragraph<'static> {
-    Paragraph::new(page_text(entry)).wrap(Wrap { trim: false })
+/// Where the text goes inside the content pane (inside its border). `draw`
+/// and `max_scroll` both use this, so they always wrap to the same width.
+/// If you add padding to the pane later, change it here.
+fn content_inner(content: Rect) -> Rect {
+    content.inner(Margin::new(1, 1))
+}
+
+/// The content pane's text, wrapped to `width` columns. `wrap.rs` does the
+/// wrapping instead of `Paragraph::wrap`, so bullets get a hanging indent.
+fn content_text(entry: &Entry, width: u16) -> Text<'static> {
+    crate::wrap::wrap(page_text(entry), width)
 }
 
 /// How far the content pane can scroll: the lines (after wrapping) that
 /// don't fit in the pane. 0 means everything fits, so it can't scroll at all.
 pub fn max_scroll(entry: &Entry, areas: &Areas) -> u16 {
-    let inner = areas.content.inner(Margin::new(1, 1)); // inside the border
-    let lines = content_paragraph(entry).line_count(inner.width);
+    let inner = content_inner(areas.content);
+    let lines = content_text(entry, inner.width).lines.len();
     lines
         .saturating_sub(inner.height as usize)
         .try_into()
@@ -141,7 +142,7 @@ pub fn draw(frame: &mut Frame, app: &App, elapsed: Duration) {
     } = layout(frame.area());
 
     // rain first so the home screen sits on top of it.
-    if !app.no_rain {
+    if app.no_rain {
         crate::rain::view(frame, elapsed);
     }
 
@@ -174,8 +175,9 @@ pub fn draw(frame: &mut Frame, app: &App, elapsed: Duration) {
     let mut state = ListState::default().with_selected(Some(app.selected));
     frame.render_stateful_widget(list, left_area, &mut state);
 
-    // Right pane: content for the selected item, scrolled
-    let content = content_paragraph(app.current())
+    // Right pane: content for the selected item, already wrapped, scrolled
+    let width = content_inner(right_area).width;
+    let content = Paragraph::new(content_text(app.current(), width))
         .block(
             Block::bordered()
                 .merge_borders(MergeStrategy::Exact)
@@ -243,7 +245,7 @@ fn key_hints(app: &App) -> Text<'static> {
         }
     }
 
-    hints.push(("x", if app.no_rain { "rain on" } else { "rain off" }));
+    hints.push(("x", if app.no_rain { "rain off" } else { "rain on" }));
 
     if app.current().is_dir() {
         hints.push(("Space/Enter", "open"));

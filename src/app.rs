@@ -1,6 +1,10 @@
 //! Application state: everything the UI needs to know to draw a frame.
 
+use ratzilla::ratatui::text::Text;
 use std::collections::HashMap;
+
+// The menu itself is defined in `src/content/`, next to the pages.
+pub use crate::content::MENU;
 
 /// One item in a menu: either a page, or a directory holding a sub-menu.
 #[derive(Debug)]
@@ -8,20 +12,28 @@ pub struct Entry {
     pub title: &'static str,
     /// Sub-menu entries. Empty for a normal page.
     pub children: &'static [Entry],
+    /// Builds the page's text, e.g. `about::text` from `src/content/about.rs`.
+    /// Unused for directories, which list their contents instead.
+    pub text: fn() -> Text<'static>,
 }
 
 impl Entry {
-    /// A normal page.
-    pub const fn page(title: &'static str) -> Self {
+    /// A normal page whose text comes from `text`.
+    pub const fn page(title: &'static str, text: fn() -> Text<'static>) -> Self {
         Self {
             title,
             children: &[],
+            text,
         }
     }
 
     /// A directory: Space opens its sub-menu, Backspace comes back.
     pub const fn dir(title: &'static str, children: &'static [Entry]) -> Self {
-        Self { title, children }
+        Self {
+            title,
+            children,
+            text: Text::default,
+        }
     }
 
     /// A directory with no children counts as a page, since there is nothing to open.
@@ -32,22 +44,6 @@ impl Entry {
 
 /// Name of the top-level menu in the breadcrumb. Click it to go back there.
 pub const HOME_LABEL: &str = "Home";
-
-/// The top-level ("Home") menu. Add `Entry::page` / `Entry::dir` items here;
-/// directories can be nested as deep as you like.
-pub const MENU: &[Entry] = &[
-    Entry::page("About"),
-    Entry::dir(
-        "Projects",
-        &[
-            Entry::page("Portfolio Website"),
-            Entry::page("Project Two"),
-            Entry::page("Project Three"),
-        ],
-    ),
-    Entry::page("Experience"),
-    Entry::page("Contact"),
-];
 
 /// Which pane currently receives movement keys (j/k/gg/G).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]

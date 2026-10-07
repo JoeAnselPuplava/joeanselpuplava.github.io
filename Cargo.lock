@@ -394,6 +394,7 @@ dependencies = [
  "ratatui",
  "ratzilla",
  "tui-rain",
+ "unicode-width",
  "wasm-bindgen",
  "web-sys",
  "web-time",
