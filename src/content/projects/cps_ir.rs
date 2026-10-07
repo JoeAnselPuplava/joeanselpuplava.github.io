@@ -18,9 +18,11 @@ pub fn text() -> Text<'static> {
         bullet(
             "Shrinking optimizations, which can only make the program smaller, run over and over until nothing changes: dead-code elimination, common-subexpression elimination, constant folding, and simplifying operations with neutral or absorbing elements (like x + 0 or x * 0).",
         ),
+        Line::raw(""),
         bullet(
             "Shrinking inlining replaces functions and continuations that are only used once with their bodies.",
         ),
+        Line::raw(""),
         bullet(
             "General inlining then copies larger functions into their call sites. Heuristics limit how much code it can add (a Fibonacci-based size limit for functions and a linear one for continuations), and another round of shrinking follows. This repeats until the program stops changing, hits an iteration limit, or grows too large.",
         ),
@@ -29,6 +31,7 @@ pub fn text() -> Text<'static> {
         bullet(
             "Optimized programs down to minimal straight-line code by eliminating redundant closures and dead branches",
         ),
+        Line::raw(""),
         bullet(
             "Validated against blackbox tests (programs still produce the same output) and greybox tests (execution traces show the expected optimizations happened)",
         ),

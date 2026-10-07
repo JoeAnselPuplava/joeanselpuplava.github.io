@@ -19,14 +19,17 @@ pub fn text() -> Text<'static> {
             "Block headers:",
             "Every block starts with a one-word header that packs the block's tag and size together.",
         ),
+        Line::raw(""),
         labeled_bullet(
             "Allocation:",
             "Free blocks live in 32 segregated free lists: one for each small size and a final list for everything larger. Allocation starts at the list for the requested size and splits a bigger block when it has to.",
         ),
+        Line::raw(""),
         labeled_bullet(
             "Heap bitmap:",
             "A bitmap with one bit per heap word sits in front of the heap. It does two jobs. It records which words are the start of a real block, so integers aren't mistaken for pointers, and it doubles as the mark bit during collection.",
         ),
+        Line::raw(""),
         labeled_bullet(
             "Collection:",
             "When an allocation fails, the collector marks everything reachable from the VM's registers, then sweeps the heap and merges neighboring free blocks back into the free lists.",
