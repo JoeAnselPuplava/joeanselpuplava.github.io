@@ -24,7 +24,7 @@ use ratzilla::{
     },
     web_sys,
 };
-use std::{cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::HashMap, ops::RangeInclusive};
 
 mod about;
 mod contact;
@@ -135,6 +135,12 @@ fn link_span(text: &'static str, target: Target) -> Span<'static> {
 /// one. Reads the link's text back from the screen, so it works wherever
 /// wrapping and scrolling put it.
 pub fn link_at(buf: &Buffer, col: u16, row: u16) -> Option<Target> {
+    link_extent(buf, col, row).map(|(target, _)| target)
+}
+
+/// Like `link_at`, but also returns the columns the link covers on `row`,
+/// for the hover highlight.
+pub fn link_extent(buf: &Buffer, col: u16, row: u16) -> Option<(Target, RangeInclusive<u16>)> {
     let is_link = |x: u16| {
         buf.cell((x, row))
             .is_some_and(|cell| cell.modifier.contains(LINK_MARKER))
@@ -154,7 +160,7 @@ pub fn link_at(buf: &Buffer, col: u16, row: u16) -> Option<Target> {
     let text: String = (start..=end).map(|x| buf[(x, row)].symbol()).collect();
     let text = text.trim();
 
-    LINKS.with_borrow(|links| {
+    let target = LINKS.with_borrow(|links| {
         links.get(text).copied().or_else(|| {
             // A link wrapped onto two lines only shows part of its text on
             // each, so fall back to the link that contains this part.
@@ -164,7 +170,8 @@ pub fn link_at(buf: &Buffer, col: u16, row: u16) -> Option<Target> {
                 _ => None,
             }
         })
-    })
+    })?;
+    Some((target, start..=end))
 }
 
 /// Opens `url`: email links in the visitor's mail app, other links in a new tab.

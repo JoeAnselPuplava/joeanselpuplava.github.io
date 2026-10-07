@@ -17,8 +17,10 @@ use ratzilla::ratatui::{
     },
 };
 
-use crate::app::{App, Entry, Pane};
-use crate::content::child_link;
+use crate::app::{App, Entry, HOME_LABEL, Pane};
+use crate::content::{Target, child_link};
+use crate::theme::Theme;
+use crate::update::{self, Clickable, Hovered};
 /// Added after a directory's name in the menu. Try " ▸", " ›" or " ⏵".
 const DIR_MARKER: &str = "/";
 
@@ -41,15 +43,19 @@ pub struct Areas {
 }
 
 /// Splits the screen into the home screen's areas. Shared by `draw` and the
-/// mouse code in `update.rs` so clicks hit exactly what is drawn.
-pub fn layout(screen: Rect) -> Areas {
+/// mouse code in `update.rs` so clicks hit exactly what is drawn. Takes the
+/// app because the hints box's height depends on which hints are showing.
+pub fn layout(screen: Rect, app: &App) -> Areas {
     use Constraint::{Fill, Length, Min};
     // Use the middle 70% of the screen; the rain shows around it.
     let area = screen.centered(Percentage(70), Percentage(70));
 
     // Rows: title, main area, status bar. Overlap(1) makes neighbouring
-    // borders share a line so merge_borders can join them.
-    let vertical = Layout::vertical([Length(2), Min(0), Length(4)]);
+    // borders share a line so merge_borders can join them. The status bar
+    // fits the key hints (2 rows when they wrap on a narrower screen), plus
+    // a row for the note or mouse hint below them, plus its 2 borders.
+    let status_rows = key_hint_rows(app, area.width) + 3;
+    let vertical = Layout::vertical([Length(2), Min(0), Length(status_rows)]);
     let [title_area, main_area, status_area] = vertical.spacing(Spacing::Overlap(1)).areas(area);
 
     // Columns: menu (1/5 of the width) and content (4/5).
@@ -139,19 +145,25 @@ pub fn max_scroll(entry: &Entry, areas: &Areas) -> u16 {
         .unwrap_or(u16::MAX)
 }
 
-/// Draws the home screen from the current `App` state.
-pub fn draw(frame: &mut Frame, app: &App, elapsed: Duration) {
+/// How a clickable thing looks while the mouse is over it.
+const HOVER_STYLE: Style = Style::new().fg(Color::Black).bg(Color::LightCyan);
+
+/// Draws the home screen from the current `App` state, inside `screen` (the
+/// part of the frame the page can show, see `event::visible_grid`). Returns
+/// what the mouse is over, if clicking it does something.
+pub fn draw(frame: &mut Frame, screen: Rect, app: &App, elapsed: Duration) -> Option<Hovered> {
+    let areas = layout(screen, app);
     let Areas {
         whole: area,
         title: title_area,
         menu: left_area,
         content: right_area,
         status: status_area,
-    } = layout(frame.area());
+    } = areas;
 
     // rain first so the home screen sits on top of it.
     if app.no_rain {
-        crate::rain::view(frame, elapsed);
+        crate::rain::view(frame, screen, elapsed);
     }
 
     // Erase the rain behind the home screen.
@@ -211,6 +223,20 @@ pub fn draw(frame: &mut Frame, app: &App, elapsed: Duration) {
         );
     }
 
+    // Whatever clickable thing the mouse is over gets highlighted. This runs
+    // after the menu and content are drawn because it reads them back from
+    // the screen (to find links), the same way a click does.
+    let hovered = app
+        .hover
+        .and_then(|(col, row)| update::hovered(app, frame.buffer_mut(), col, row, &areas));
+    if let Some(h) = &hovered {
+        for x in h.cols.clone() {
+            if let Some(cell) = frame.buffer_mut().cell_mut((x, h.row)) {
+                cell.set_style(HOVER_STYLE);
+            }
+        }
+    }
+
     // Status bar: the keys that do something right now. On the right of its
     // border, like vim's showcmd, the count or "g" being typed.
     let typed = format!(
@@ -219,7 +245,7 @@ pub fn draw(frame: &mut Frame, app: &App, elapsed: Duration) {
         app.pending.map(String::from).unwrap_or_default()
     );
     frame.render_widget(
-        Paragraph::new(key_hints(app))
+        Paragraph::new(key_hints(app, hovered.as_ref()))
             .wrap(Wrap { trim: true })
             .block(
                 Block::bordered()
@@ -229,13 +255,41 @@ pub fn draw(frame: &mut Frame, app: &App, elapsed: Duration) {
             ),
         status_area,
     );
+
+    // Last, so it recolors everything drawn above.
+    crate::theme::apply(frame.buffer_mut(), screen, app.theme);
+    hovered
 }
 
 /// Key binds for the status bar, depending on which pane has focus, whether
 /// the highlighted entry is a directory, whether we're inside one, and
-/// whether the content can scroll, plus a note on its own line below.
+/// whether the content can scroll. The line below says what clicking does
+/// when the mouse is over something clickable, and has a note otherwise.
 /// Keep in sync with `update::update`.
-fn key_hints(app: &App) -> Text<'static> {
+fn key_hints(app: &App, hovered: Option<&Hovered>) -> Text<'static> {
+    // A `Text` is a list of lines, so the note always starts on the next line.
+    let note = match hovered {
+        Some(h) => click_hint(app, h.what),
+        None => Line::from(vec![
+            Span::styled("Note:", Style::new().fg(Color::LightCyan).bold()),
+            Span::raw(" Mouse actions also work!"),
+        ]),
+    };
+    Text::from(vec![key_line(app), note])
+}
+
+/// How many rows the key hints take once wrapped in a status bar `width`
+/// cells wide, so `layout` can make the status bar tall enough.
+fn key_hint_rows(app: &App, width: u16) -> u16 {
+    let inside = width.saturating_sub(2); // inside the borders
+    let rows = Paragraph::new(key_line(app))
+        .wrap(Wrap { trim: true })
+        .line_count(inside);
+    rows.clamp(1, 3) as u16
+}
+
+/// The key hints on one line: each key in the accent color, then what it does.
+fn key_line(app: &App) -> Line<'static> {
     let mut hints: Vec<(&str, &str)> = Vec::new();
     match app.focus {
         Pane::Menu => {
@@ -254,6 +308,13 @@ fn key_hints(app: &App) -> Text<'static> {
     }
 
     hints.push(("x", if app.no_rain { "rain off" } else { "rain on" }));
+    hints.push((
+        "i",
+        match app.theme {
+            Theme::Dark => "light theme",
+            Theme::Light => "dark theme",
+        },
+    ));
 
     if app.current().is_dir() {
         hints.push(("Space/Enter", "open"));
@@ -271,11 +332,48 @@ fn key_hints(app: &App) -> Text<'static> {
         spans.push(Span::styled(key, Style::new().fg(Color::LightCyan).bold()));
         spans.push(Span::raw(format!(" {action}")));
     }
+    Line::from(spans)
+}
 
-    // A `Text` is a list of lines, so the note always starts on the next line.
-    let note = Line::from(vec![
-        Span::styled("Note:", Style::new().fg(Color::LightCyan).bold()),
-        Span::raw(" Mouse actions also work!"),
-    ]);
-    Text::from(vec![Line::from(spans), note])
+/// What clicking `what` does, styled like the key hints: the mouse action,
+/// then what it does. Says whether it takes one click or a double-click.
+/// Keep in sync with `main.rs` and `update::click` / `update::double_click`.
+fn click_hint(app: &App, what: Clickable) -> Line<'static> {
+    let action = |s: &'static str| Span::styled(s, Style::new().fg(Color::LightCyan).bold());
+    let click = |text: String| Line::from(vec![action("Click"), Span::raw(format!(" {text}"))]);
+    match what {
+        Clickable::Link(Target::Url(url)) => match url.strip_prefix("mailto:") {
+            Some(address) => click(format!("to email {address}")),
+            None => click(format!(
+                "to open {} in a new tab",
+                url.trim_start_matches("https://")
+            )),
+        },
+        Clickable::Link(Target::Child(index)) => {
+            let title = app.current().children.get(index).map_or("", |e| e.title);
+            click(format!("to open {title}"))
+        }
+        Clickable::MenuEntry(index) => {
+            let entry = &app.menu()[index];
+            let name = label(entry);
+            if !entry.is_dir() {
+                click(format!("to show {name}"))
+            } else if index == app.selected {
+                // Already previewed, so only a double-click does anything.
+                Line::from(vec![action("Double-click"), Span::raw(format!(" to open {name}"))])
+            } else {
+                Line::from(vec![
+                    action("Click"),
+                    Span::raw(format!(" to preview {name}   ")),
+                    action("Double-click"),
+                    Span::raw(" to open it"),
+                ])
+            }
+        }
+        Clickable::Breadcrumb(depth) => {
+            let parts = app.breadcrumb();
+            let name = parts.get(depth).map_or(HOME_LABEL, |p| p.trim_start_matches('/'));
+            click(format!("to go back to {name}"))
+        }
+    }
 }

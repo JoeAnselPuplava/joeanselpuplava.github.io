@@ -3,6 +3,8 @@
 use ratzilla::ratatui::text::Text;
 use std::collections::HashMap;
 
+use crate::theme::Theme;
+
 // The menu itself is defined in `src/content/`, next to the pages.
 pub use crate::content::MENU;
 
@@ -65,6 +67,8 @@ pub struct App {
     pub count: Option<usize>, // count typed before a motion, e.g. the 5 in "5j"
     pub pending: Option<char>, // first key of a two-key motion, e.g. the first g of "gg"
     pub no_rain: bool,    // Says whether the rain should be turned on or not
+    pub hover: Option<(u16, u16)>, // cell under the mouse pointer, as (col, row)
+    pub theme: Theme,     // light or dark, switched with i
 }
 
 impl App {

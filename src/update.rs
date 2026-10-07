@@ -2,11 +2,13 @@
 //! changes to `App`.
 
 use crate::app::{App, Pane};
+use crate::content::{Target, link_extent};
 use crate::home::Areas;
 use ratzilla::{
     event::{KeyCode, KeyEvent},
-    ratatui::layout::Position,
+    ratatui::{buffer::Buffer, layout::Position},
 };
+use std::ops::RangeInclusive;
 
 /// Handles one key press. To add a binding, add an arm to the `match`.
 pub fn update(app: &mut App, key: KeyEvent) {
@@ -34,6 +36,7 @@ pub fn update(app: &mut App, key: KeyEvent) {
         (_, KeyCode::Char(' ') | KeyCode::Enter) => app.enter(), // open a directory
         (_, KeyCode::Backspace) => app.leave(),                  // back to the parent menu
         (_, KeyCode::Char('x')) => app.no_rain = !app.no_rain,
+        (_, KeyCode::Char('i')) => app.theme = app.theme.toggled(), // light/dark theme
         _ => {} // Esc and unknown keys do nothing; count and pending were already cleared
     }
 }
@@ -71,9 +74,20 @@ pub fn double_click(app: &mut App, col: u16, row: u16, areas: &Areas) {
 }
 
 /// Which part of the breadcrumb is at cell (`col`, `row`), as a menu depth
-/// (0 = Home). The title sits on the menu's top border, starting one cell in
-/// from the corner.
+/// (0 = Home).
 fn breadcrumb_depth(app: &App, col: u16, row: u16, areas: &Areas) -> Option<usize> {
+    breadcrumb_part(app, col, row, areas).map(|(depth, _)| depth)
+}
+
+/// The breadcrumb part at cell (`col`, `row`): its menu depth and the
+/// columns it covers. The title sits on the menu's top border, starting one
+/// cell in from the corner.
+fn breadcrumb_part(
+    app: &App,
+    col: u16,
+    row: u16,
+    areas: &Areas,
+) -> Option<(usize, RangeInclusive<u16>)> {
     if row != areas.menu.y {
         return None;
     }
@@ -81,7 +95,7 @@ fn breadcrumb_depth(app: &App, col: u16, row: u16, areas: &Areas) -> Option<usiz
     for (depth, part) in app.breadcrumb().iter().enumerate() {
         let end = start + part.chars().count() as u16;
         if (start..end).contains(&col) {
-            return Some(depth);
+            return Some((depth, start..=end - 1));
         }
         start = end;
     }
@@ -109,4 +123,50 @@ pub fn scroll(app: &mut App, col: u16, row: u16, lines: i32, areas: &Areas) {
         let index = (app.selected as i32 + lines).clamp(0, app.menu().len() as i32 - 1);
         app.select(index as usize);
     }
+}
+
+/// Something on screen that does something when clicked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Clickable {
+    /// A link in the content pane.
+    Link(Target),
+    /// Entry `index` of the current menu.
+    MenuEntry(usize),
+    /// The breadcrumb part that goes back to menu depth `depth`.
+    Breadcrumb(usize),
+}
+
+/// The clickable thing under the pointer and the cells it covers (columns
+/// `cols` of row `row`), for the hover highlight and hint.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Hovered {
+    pub what: Clickable,
+    pub row: u16,
+    pub cols: RangeInclusive<u16>,
+}
+
+/// What a click at cell (`col`, `row`) would act on, if anything. Checks the
+/// same things as a click (links first, like `main.rs`, then the menu) so the
+/// hover hint always matches what clicking does.
+pub fn hovered(app: &App, buf: &Buffer, col: u16, row: u16, areas: &Areas) -> Option<Hovered> {
+    let at = |what, cols| Some(Hovered { what, row, cols });
+    if let Some((target, cols)) = link_extent(buf, col, row) {
+        return at(Clickable::Link(target), cols);
+    }
+    if let Some((depth, cols)) = breadcrumb_part(app, col, row, areas) {
+        // The last part is where we already are, so clicking it does nothing.
+        return if depth < app.path.len() {
+            at(Clickable::Breadcrumb(depth), cols)
+        } else {
+            None
+        };
+    }
+    let index = menu_index(app, col, row, areas)?;
+    // The entry's text: after the border and the 2-cell "> " marker column,
+    // up to its last character before the right border.
+    let start = areas.menu.x + 3;
+    let end = (start..areas.menu.right() - 1)
+        .rev()
+        .find(|&x| buf[(x, row)].symbol() != " ")?;
+    at(Clickable::MenuEntry(index), start..=end)
 }
